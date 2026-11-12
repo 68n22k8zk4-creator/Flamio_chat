@@ -1,0 +1,40 @@
+workflows:
+  ios-ipa:
+    name: LifeApp unsigned IPA
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      xcode: latest
+    scripts:
+      - name: Prepare sources
+        script: |
+          # Работает в двух вариантах: в репозитории лежит LifeApp.zip ИЛИ уже распакованные папки
+          rm -rf src && mkdir src
+          if [ -f LifeApp.zip ]; then
+            unzip -q LifeApp.zip -d src
+          else
+            cp -R App Shared Widget project.yml src/
+          fi
+          # если внутри zip оказалась обёртка-папка
+          if [ ! -f src/project.yml ] && [ -f src/LifeApp/project.yml ]; then
+            mv src/LifeApp/* src/
+          fi
+          ls -la src
+      - name: Generate Xcode project
+        script: |
+          brew install xcodegen
+          cd src && xcodegen generate
+      - name: Build (unsigned)
+        script: |
+          cd src
+          xcodebuild -project LifeApp.xcodeproj -scheme LifeApp \
+            -configuration Release -sdk iphoneos -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: Package IPA
+        script: |
+          cd src
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/LifeApp.app Payload/
+          zip -qr Flamio.ipa Payload
+    artifacts:
+      - src/Flamio.ipa
